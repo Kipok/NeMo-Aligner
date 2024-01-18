@@ -264,16 +264,16 @@ def build_sft_dataset(data_cfg, tokenizer, num_samples, answer_only_loss=True, i
     dataset_cls = GPTSFTChatDataset if is_chat else GPTSFTDataset
     # parameters that don't come from the config
     dataset_params = {
-        'tokenizer': tokenizer,
-        'answer_only_loss': answer_only_loss,
-        'special_tokens': special_tokens,
-        'max_num_samples': num_samples,
-        'sep_id': 0,
-        'virtual_tokens': 0,
+        "tokenizer": tokenizer,
+        "answer_only_loss": answer_only_loss,
+        "special_tokens": special_tokens,
+        "max_num_samples": num_samples,
+        "sep_id": 0,
+        "virtual_tokens": 0,
     }
     dataset_params.update(data_cfg)
     # parameters that are in the config, but not in the dataset's init
-    for param_name in ['global_batch_size', 'micro_batch_size', 'shuffle', 'drop_last']:
+    for param_name in ["global_batch_size", "micro_batch_size", "shuffle", "drop_last"]:
         dataset_params.pop(param_name)
     dataset = dataset_cls(**dataset_params)
     return dataset

@@ -58,36 +58,37 @@ class InferenceMetricsHandler:
 
 def get_prediction(idx, batch, generation_output):
     """A helper function to get predicted output for a typical dataloader format."""
-    elem_metadata = batch['metadata'][idx]
+    elem_metadata = batch["metadata"][idx]
     # need to remove original prompt from the generated output as it's always included
-    if 'conversations' in elem_metadata:  # chat format
+    if "conversations" in elem_metadata:  # chat format
         # last one is the target, so splitting on the one before that
-        pred_output = generation_output['sentences'][idx].split(elem_metadata['conversations'][-2]['value'])[-1]
+        pred_output = generation_output["sentences"][idx].split(elem_metadata["conversations"][-2]["value"])[-1]
     else:  # input-output format
-        pred_output = generation_output['sentences'][idx][len(batch['metadata'][idx]['input']):]
+        pred_output = generation_output["sentences"][idx][len(batch["metadata"][idx]["input"]) :]
     return pred_output
 
 
 def get_target(idx, batch):
     """A helper function to get expected target output for a typical dataloader format."""
-    elem_metadata = batch['metadata'][idx]
-    if 'conversations' in elem_metadata:  # chat format
-        target_output = elem_metadata['conversations'][-1]['value']  # always comparing the last one
+    elem_metadata = batch["metadata"][idx]
+    if "conversations" in elem_metadata:  # chat format
+        target_output = elem_metadata["conversations"][-1]["value"]  # always comparing the last one
     else:  # input-output format
-        target_output = elem_metadata['output']
+        target_output = elem_metadata["output"]
     return target_output
 
 
 class ExactStringMatchMetric(Metric):
     """Computing exact string match between predicted and target outputs."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(dist_sync_on_step=False)
 
-        self.add_state("correct", default=torch.tensor(0, device='cuda'), dist_reduce_fx="sum")
-        self.add_state("total", default=torch.tensor(0, device='cuda'), dist_reduce_fx="sum")
+        self.add_state("correct", default=torch.tensor(0, device="cuda"), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0, device="cuda"), dist_reduce_fx="sum")
 
     def update(self, batch, generation_output):
-        for idx in range(len(batch['metadata'])):
+        for idx in range(len(batch["metadata"])):
             pred_output = get_prediction(idx, batch, generation_output)
             target_output = get_target(idx, batch)
             self.correct += pred_output == target_output
