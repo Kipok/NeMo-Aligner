@@ -37,10 +37,11 @@ trainer:
 
     environments:
       math:
-        servers:
-          math_grader:
-            ip: localhost
-            port: 3141
+        server:
+          server_type: trtllm
+        prompt:
+          prompt_template: qwen-instruct
+          prompt_config: judge/math
 
     # the sequence length to pad the rollout batch for training to
     # reduce fragmentation at the cost of using more

@@ -726,18 +726,18 @@ def batch_repeat(batch, num_repetitions=1):
     other = {}
     for k in special_keys:
         if k in batch.keys():
-            other[k] = batch[k] 
+            other[k] = batch[k]
 
     return output | other
 
 def batch_index_select(batch: dict, indices) -> dict:
     """
     Selects specified indices from each value in a dictionary of tensors/lists.
-    
+
     Args:
         batch: A dictionary where values are tensors or lists.
         indices: Indices to select (list or tensor of integers).
-    
+
     Returns:
         A new dictionary with values sliced at the specified indices.
     """
@@ -764,12 +764,12 @@ def reconstruct_split_batch(
 ) -> dict:
     """
     Reconstructs the original batch from split batches with external indices/task lists.
-    
+
     Args:
         split_batches: List of data dictionaries (without indices/task keys)
         indices_list: Parallel list containing indices for each split batch
         tasks: Parallel list of task identifiers (same length as split_batches)
-    
+
     Returns:
         Dictionary reconstructing the original batch with correct ordering
     """
@@ -810,11 +810,11 @@ def reconstruct_split_batch(
         elif isinstance(sample_value, list):
             # List reconstruction with ordering preservation
             reconstructed = [None] * n
-            
+
             for batch, indices in zip(split_batches, indices_list):
                 if isinstance(indices, torch.Tensor):
                     indices = indices.tolist()
-                
+
                 for data_idx, original_idx in enumerate(indices):
                     reconstructed[original_idx] = batch[key][data_idx]
 
