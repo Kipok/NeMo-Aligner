@@ -19,6 +19,7 @@ import torch
 from nemo_aligner.experimental.grpo.utils import parallel_state
 from nemo_aligner.experimental.grpo.experience.interfaces import EnvironmentInterface
 from nemo_aligner.experimental.grpo.experience.environments.metrics import calculate_pass_rate_per_prompt
+from nemo_aligner.utils.distributed import broadcast_2d_tensor_within_mp
 
 from nemo_skills.code_execution.math_grader import extract_answer
 from nemo_skills.evaluation.metrics.utils import is_correct_judgement
@@ -92,7 +93,11 @@ class MathEnvironment(EnvironmentInterface):
                 generation_idx += 1
         results = [is_correct_judgement(judgement) for judgement in judgements]
 
+        # sharing across MP group
+        results = torch.tensor(results, device=torch.cuda.current_device()).unsqueeze(1)
+        results = broadcast_2d_tensor_within_mp(results)
         th_rewards = torch.tensor(results).squeeze(1)
+
         print('th rewards shape', th_rewards.shape)
         return None, None, th_rewards, torch.ones(th_rewards.shape[0],)
 
