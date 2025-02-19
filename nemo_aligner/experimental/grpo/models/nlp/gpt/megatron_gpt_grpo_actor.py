@@ -95,7 +95,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
         self.prepare_for_inference_warmed_up = False
         # Collect backends from the configuration and check which ones are enabled
         enabled_backends = [
-            name for name in cfg.grpo.inference_backend.config.keys() 
+            name for name in cfg.grpo.inference_backend.config.keys()
             if cfg.grpo.inference_backend.config.get(name, {}).get("enable", False)
         ]
         if len(enabled_backends) > 1:
@@ -109,7 +109,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                 f"No inference backend is enabled. Please enable one backend in the configuration. "
                 f"Available backends: {', '.join(list_available_backends())}."
             )
-        
+
         if self.cfg.grpo.inference_backend.enable:
             self.inference_backend = self._initialize_inference_backend(self.cfg.grpo.inference_backend.get("type"))
 
@@ -157,7 +157,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
             self.shared_cpu_state_dict = SharedCPUMemoryTensorDict()
         elif backend_type == "trt_llm_pytorch":
 
-            from nemo_aligner.experimental.grpo.inference.trtllm_pytorch.trtllm_pytorch_client import TRTLLMPytorchClient 
+            from nemo_aligner.experimental.grpo.inference.trtllm_pytorch.trtllm_pytorch_client import TRTLLMPytorchClient
             backend = TRTLLMPytorchClient(
                 self.cfg.grpo.inference_backend.config.trt_llm_pytorch,
                 tokenizer=self.tokenizer,
@@ -366,18 +366,22 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
         self._reset_sequence_parallelism_args()
         set_eval(self)
         self.offload_adam_states()
-        
+
         # testing sync and save to cpu ramdisk
         start_time = time.time()
-        out_dir = self.cfg.grpo.share_dir #"/dev/shm/checkpoint_hf/"
+        out_dir = self.cfg.grpo.share_dir
 
         if torch.cuda.current_device() == 0:
-            if os.path.isdir(self.cfg.hf_model_name_or_configs_dir):
+            if self.cfg.hf_model_name_or_configs_dir is not None:
+                hf_model_name_or_configs_dir = self.cfg.hf_model_name_or_configs_dir
+            else:  # getting it from the tokenizer
+                hf_model_name_or_configs_dir = self.tokenizer.type
+            if os.path.isdir(hf_model_name_or_configs_dir):
                 # If a directory is provided, use it directly to obtain all .json files.
-                source_hf_jsons_dir = self.cfg.hf_model_name_or_configs_dir
+                source_hf_jsons_dir = hf_model_name_or_configs_dir
             else:
                 # Otherwise, treat it as a HuggingFace model name and download all .json files from the repo.
-                source_hf_jsons_dir = snapshot_download(self.cfg.hf_model_name_or_configs_dir, allow_patterns=["*.json"], ignore_patterns=["*.index.json"])
+                source_hf_jsons_dir = snapshot_download(hf_model_name_or_configs_dir, allow_patterns=["*.json"], ignore_patterns=["*.index.json"])
         # os.chmod(out_dir, 0o777)
         class SafeDict(dict):
             def __missing__(self, key):
@@ -391,7 +395,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
             pp_world_size = torch.distributed.get_world_size(pp_group)
             my_pp_rank = parallel_state.get_training_pipeline_model_parallel_rank()
             pp_global_rank_ids = parallel_state.get_all_rank_ids_in_group(pp_group)
-            
+
             # Build a mapping on each PP rank from a computed global key to the raw state dict key.
             # The global key is computed by replacing the local layer number (after "layers.")
             # with its corresponding global layer number (if applicable).
@@ -409,7 +413,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
             # Gather the local maps from all PP ranks (only lightweight key info is gathered).
             all_maps = [None] * pp_world_size
             torch.distributed.all_gather_object(all_maps, local_map, group=pp_group)
-            
+
             # Build the union over global keys and assign an owner (the rank with the smallest PP rank).
             union_global_map = {}
             for pp_rank, omap in enumerate(all_maps):
@@ -420,7 +424,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                         print(f"WARNING: {gk} already in union_global_map when gathering keys", flush=True)
 
             #merged_cpu_param_dict = {}
-   
+
             # Process each parameter (by its unique global key) one at a time.
             for gk in sorted(union_global_map.keys()):
                 ptime = time.time()
@@ -429,12 +433,12 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                 # Only the owner PP rank has the parameter locally.
                 if torch.distributed.get_rank() == owner_pp_global_rank:
                     param = self.state_dict()[owner_raw_key]
-                    
+
                     # Retrieve layer identification info using the conversion helpers.
                     local_layer = CONVERTER.get_local_layer_num(owner_raw_key)
                     global_layer = CONVERTER.get_global_layer_num(owner_raw_key, self.cfg) if local_layer is not None else None
                     format_dict = SafeDict(l=local_layer, gl=global_layer)
-                    
+
                     # Use the conversion dict to get the appropriate recipe for this parameter.
                     formatted_mapping = {k.format_map(format_dict): rec for k, rec in CONVERTER.mcore_te_to_hf_llama.items()}
                     recipe = formatted_mapping.get(owner_raw_key, None)
@@ -451,7 +455,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                             full_param = torch.cat(gathered_slices, dim=recipe["tp"]).to(torch.bfloat16)
                         else:
                             full_param = torch.clone(param).to(torch.bfloat16)
-                        
+
                         # Convert the parameter using the provided function or mapping.
                         if recipe.get("hf_func", None) is not None:
                             hf_mapping = recipe["hf_func"](full_param, self.cfg)
@@ -462,17 +466,17 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                             raise NotImplementedError(f"No conversion recipe found for {owner_raw_key}")
                 else:
                     hf_mapping = None  # Non-owner ranks will receive the converted tensors.
-                
+
                 # Broadcast the list of target HF parameter keys from the owner.
                 if torch.distributed.get_rank() == owner_pp_global_rank:
                     target_keys = [list(hf_mapping.keys())]
                 else:
                     target_keys = [None]  # Placeholder to be filled by broadcast.
-                
+
                 torch.distributed.broadcast_object_list(target_keys, src=owner_pp_global_rank, group=pp_group)
                 if 'None' in target_keys[0]:
                     continue
-                
+
                 # For each converted tensor (could be more than one per original parameter), broadcast it individually.
                 for target_key in target_keys[0]:
                     if torch.distributed.get_rank() == owner_pp_global_rank:
@@ -494,7 +498,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                         self.shared_cpu_state_dict[target_key] = tensor_to_send
                         checksum += tensor_to_send.sum().item()
                     del tensor_to_send
-                
+
                 # Cleanup on the owner side.
                 if torch.distributed.get_rank() == owner_pp_global_rank:
                     if 'full_param' in locals():
@@ -510,7 +514,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
             torch.cuda.empty_cache()
             print("Finished parameter-by-parameter gathering over PP with conversion mapping.", flush=True)
             print(f"Checksum: {checksum}", flush=True)
-        
+
             # Copy HF jsons to CPU ramdisk with proper permissions and save the gathered parameters.
             if torch.cuda.current_device() == 0:
                 try:
@@ -524,7 +528,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                 except Exception as e:
                     print(f"Error copying HF json files: {e}", flush=True)
                     raise
-        
+
                 try:
                     ptime = time.time()
                     if not self.prepare_for_inference_warmed_up:
@@ -562,7 +566,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
             print(f"reserved before clear before refit {torch.cuda.memory_reserved() / 1024**3:.2f} GB", flush=True)
             print(f"allocated before clear before refit {torch.cuda.memory_allocated() / 1024**3:.2f} GB", flush=True)
             clear_memory()
-            print(f"Memory free after clear before refit {torch.cuda.mem_get_info()[0] / 1024**3:.2f} GB", flush=True)  
+            print(f"Memory free after clear before refit {torch.cuda.mem_get_info()[0] / 1024**3:.2f} GB", flush=True)
             print(f"reserved after clear before refit {torch.cuda.memory_reserved() / 1024**3:.2f} GB", flush=True)
             print(f"allocated after clear before refit {torch.cuda.memory_allocated() / 1024**3:.2f} GB", flush=True)
             if self.cfg.grpo.inference_backend.type == "vllm":
