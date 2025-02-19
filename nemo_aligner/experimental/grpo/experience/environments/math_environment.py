@@ -26,9 +26,9 @@ class MathEnvironment(EnvironmentInterface):
     def __init__(self, cfg: DictConfig):
         self.executor = futures.ThreadPoolExecutor()
         self.communicator = FlaskCommunicator(cfg.servers)
-        
+
         print(f"Started MathEnvironment client with {cfg.servers}")
-        
+
     def start_step(self, interactions, metadata):
         """
         metadata: List[Dict]. Needs to contain a "ground_truth" key, which is what
@@ -37,7 +37,7 @@ class MathEnvironment(EnvironmentInterface):
         if parallel_state.is_model_parallel_src_rank():
             # fold all interactions after the prompt together
             responses = [''.join(interaction[1:]) for interaction in interactions]
-            ground_truths = [g["ground_truth"] for g in metadata]
+            ground_truths = [g["expected_answer"] for g in metadata]
             data = {
                 "pred_responses": responses,
                 "ground_truths": ground_truths,
@@ -52,19 +52,19 @@ class MathEnvironment(EnvironmentInterface):
         th_rewards = torch.tensor(results).squeeze(1)
         print('th rewards shape', th_rewards.shape)
         return None, None, th_rewards, torch.ones(th_rewards.shape[0],)
-    
+
     def global_post_process_and_metrics(self, batch):
         """
         Computes metrics for this environment given a global rollout batch.
 
-        Every rank will run this function, so you're free to use distributed 
-        calculations if you'd prefer for heavy metrics. 
+        Every rank will run this function, so you're free to use distributed
+        calculations if you'd prefer for heavy metrics.
         """
         table = {
             "reward": batch["rewards"][0].item(),
             "prompt_sentence": batch["prompt_sentences"][0],
             "response_sentence": batch["response_sentences"][0],
-            "expected_answer": batch["extra_verifier_info"][0]["ground_truth"],
+            "expected_answer": batch["extra_verifier_info"][0]["expected_answer"],
         }
         batch["rewards"] = batch["rewards"] * batch["is_end"] # set a reward of 0 for any incorrectly ended sequences
         if (batch["rewards"] == 1).float().sum() > 0:
@@ -73,7 +73,7 @@ class MathEnvironment(EnvironmentInterface):
             )
         else:
             correct_solution_generation_lengths = 0
-        
+
         metrics = {
             #"table": table, TODO @sahilj WIP
             "accuracy": batch["rewards"].mean().item(),
@@ -85,5 +85,5 @@ class MathEnvironment(EnvironmentInterface):
             "generation_lengths": (batch["response_lengths"] - batch["prompt_lengths"]).float().mean().item(),
             "correct_solution_generation_lengths": correct_solution_generation_lengths,
         }
-        
+
         return batch, metrics

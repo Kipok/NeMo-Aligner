@@ -21,13 +21,14 @@ from nemo_aligner.utils.utils import batch_pad_to_fixed_len
 
 #TODO @sahilj handle too-long prompts and masking them out throughout the whole process and renormalizing on loss
 class AllTaskDataset:
-    def __init__(self, data_path, tokenizer, apply_chat_template: bool = True, system_prompt_file: str = None, prompt_file: str = None, seq_length=None):
+    def __init__(self, data_path, tokenizer, task_to_prompt_key, apply_chat_template: bool = True, system_prompt_file: str = None, prompt_file: str = None, seq_length=None):
         super().__init__()
         self.data_path = data_path
         self.tokenizer = tokenizer
         self.apply_chat_template = apply_chat_template
         self.system_prompt = None
-        self.prompt = "{}"
+        self.prompt = None
+        self.task_to_prompt_key = task_to_prompt_key
 
         assert os.path.exists(self.data_path), f"{self.data_path} must exist"
 
@@ -48,7 +49,7 @@ class AllTaskDataset:
                 f"prompt file {prompt_file} was specified but does not exist"
             with open(prompt_file, "r", encoding="utf-8") as f:
                 self.prompt = f.read()
-        
+
     def __len__(self):
         return len(self.data)
 
@@ -61,12 +62,10 @@ class AllTaskDataset:
         Return a single prompt.
         """
         task_name = self.data[idx]["task_name"]
-        extra_verifier_info = None
-        if task_name == "math":
-            text_str = self.data[idx]["problem"]
-            extra_verifier_info = {"ground_truth": self.data[idx]["expected_answer"]}
-        else:
-            raise NotImplementedError(f"task name {task_name} in your dataset doesn't have a handler yet!")
+        prompt_key = self.task_to_prompt_key[task_name]
+        text_str = self.data[idx][prompt_key]
+        # passing in all the data except original prompt
+        extra_verifier_info = {k: v for k, v in self.data[idx].items() if k != prompt_key}
 
         if self.apply_chat_template:
             chat = []
@@ -74,12 +73,14 @@ class AllTaskDataset:
                 chat.append({"role": "system", "content": self.system_prompt})
             chat.append({"role": "user", "content": self.prompt.format(text_str)})
             text = self.tokenizer.tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
-        else:
+        elif self.prompt is not None:
             text = self.prompt.format(text_str)
+        else:  # assuming data is prepared with all special tokens
+            text = text_str
 
         sample, _ = self.encode(text)
         sample_tensor = torch.as_tensor(sample, dtype=torch.int64)
-        
+
         output = {
             "text": sample_tensor,
             "length": sample_tensor.shape[0],
@@ -88,8 +89,8 @@ class AllTaskDataset:
             "idx": idx,
             "task_name": task_name,
         }
-        return output  
-    
+        return output
+
 def environment_collate_with_batch_max_sequence_length(
     data_batch,
     response_token_length,

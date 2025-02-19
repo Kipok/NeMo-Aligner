@@ -104,6 +104,7 @@ def main(cfg) -> None:
         AllTaskDataset(
             cfg.model.data.data_prefix[split][0],
             ptl_model.tokenizer,
+            cfg.model.data.task_to_prompt_key,
             cfg.model.data.apply_chat_template,
             cfg.model.data.system_prompt_file,
             cfg.model.data.prompt_file,
@@ -174,7 +175,7 @@ def main(cfg) -> None:
 
     batch_iterator_cfg = cfg.trainer.grpo.get("batch_iterator", {})
     batch_iterator_cls = get_batch_iterator_cls(batch_iterator_cfg)
-    
+
     print([(name, p.shape) for name, p in ptl_model.model.named_parameters()], flush=True)
 
     grpo_trainer = GRPOTrainer(
@@ -196,7 +197,7 @@ def main(cfg) -> None:
         grpo_trainer.load_state_dict(custom_trainer_state_dict)
 
     grpo_trainer.fit()
-    
+
     # do any environment cleanup here
 
 if __name__ == "__main__":

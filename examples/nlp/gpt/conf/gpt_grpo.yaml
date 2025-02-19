@@ -21,7 +21,7 @@ trainer:
     initial_policy_kl_penalty: 0.01
     use_leave_one_out_baseline: True
     normalize_rewards: True
-    
+
     # rollout arguments
     generation_rollout_mbs: 8
 
@@ -30,11 +30,11 @@ trainer:
     samples_per_prompt: 32
 
     val_prompt_micro_batch_size: 8
-    val_num_prompts_per_grpo_step: 512 
-    val_samples_per_prompt: 1 
-    
+    val_num_prompts_per_grpo_step: 512
+    val_samples_per_prompt: 1
+
     generation_save_dir: null
-    
+
     environments:
       math:
         servers:
@@ -54,7 +54,7 @@ trainer:
     # Speed-up training by accelerating inference stage using backends like TRT-LLM, vLLM
     inference_backend:
       type: trt_llm  # Can be 'trt_llm', 'trt_llm_pytorch', 'sglang', 'vllm'.
-      
+
       # Common settings for all backends
       enable: True
       seed: ${model.seed}
@@ -62,7 +62,7 @@ trainer:
       # By default, assume the max input length is the difference between the model sequence length and the max number of tokens to generate
       max_input_len: ${subtract:${model.encoder_seq_length}, ${model.grpo.length_params.max_length}}
       reshard: False # if True then reshard the model into TP only for inference
-      
+
       # Backend-specific configurations
       config:
         # TRTLLM-specific options
@@ -71,7 +71,7 @@ trainer:
           enable: True
           model_type: llama  # Can be gptj, gptnext, llama, gemma, falcon
           unload_engine_train: False
-          
+
         vllm:
           enable: False
           port: 4321
@@ -148,7 +148,7 @@ model:
       use_greedy: False
       temperature: 1.0
       top_k: -1
-      top_p: 1.0
+      top_p: 0.95
       repetition_penalty: 1.0
       add_BOS: False
       all_probs: False
@@ -237,6 +237,8 @@ model:
     prompt_file: null
     system_prompt_file: null
     shuffle_train_data: True
+    task_to_prompt_key:
+      math: problem
 
   # define fields from the base model's config that should be ignored when merging with this config.
   overwrite_base_config:

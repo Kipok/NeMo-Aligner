@@ -33,19 +33,19 @@ class SuperSimpleRolloutGenerator(RolloutGeneratorInterface):
         self.samples_per_prompt = cfg.samples_per_prompt
         self.prompt_batch_size = cfg.prompt_batch_size
         self.rollout_batch_seq_length = cfg.rollout_batch_seq_length
-    
-    # TODO @sahil have a basic example 
-    
+
+    # TODO @sahil have a basic example
+
 
 class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
     def __init__(self, cfg: DictConfig, tasks_to_environments: Dict[str, EnvironmentInterface]):
         """
-        tasks_to_environments: A mapping of task string names (as will be pulled from the 
-                               sample "task_name" field) to an Environment object that can 
+        tasks_to_environments: A mapping of task string names (as will be pulled from the
+                               sample "task_name" field) to an Environment object that can
                                process that task.
-        cfg:                   DictConfig that needs to define "samples_per_prompt" and 
-                               "prompt_batch_size", and "rollout_mbs". 
-                               prompt_batch_size must divide rollout_mbs and 
+        cfg:                   DictConfig that needs to define "samples_per_prompt" and
+                               "prompt_batch_size", and "rollout_mbs".
+                               prompt_batch_size must divide rollout_mbs and
                                rollout_mbs // prompt_batch_size >= samples_per_prompt
         """
         self.tasks_to_environments = tasks_to_environments
@@ -58,7 +58,7 @@ class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
         self.generation_save_dir = cfg.generation_save_dir
         self.rollout_batch_seq_length = cfg.rollout_batch_seq_length
         self.timer = ScopedTimer()
-        
+
         assert self.rollout_mbs % self.prompt_batch_size == 0, \
             (f"The generation microbatch size of the model ({self.rollout_mbs}) must be a ",
              f"multiple of the prompt_batch_size ({self.prompt_batch_size}) from the dataloader.")
@@ -93,16 +93,16 @@ class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
             policy_model.tokenizer.ids_to_text(response_tokens[i][prompt_lengths[i] : response_lengths[i]].tolist())
             for i in range(response_lengths.shape[0])
         ]
-        
+
         rollout_batch["prompt_sentences"] = prompt_sentences
         rollout_batch["response_sentences"] = response_sentences
         return rollout_batch
-    
+
     def prepare_env_state(self, rollout_batch):
         interactions = [[p, r] for p, r in zip(rollout_batch["prompt_sentences"], rollout_batch["response_sentences"])]
         metadata = rollout_batch["extra_verifier_info"]
         return interactions, metadata
-        
+
     def generate_rollouts(self,
                           batch_iterator,
                           policy_model,
@@ -128,7 +128,6 @@ class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
                     else:
                         num_repetitions = self.rollout_mbs // self.prompt_batch_size
                         num_rollout_batches_per_data_batch = self.samples_per_prompt // num_repetitions
-
                     print(batch["text"].shape)
                     print(f"batch idxs: {batch['idx']}", flush=True)
                     batch = batch_repeat(batch, num_repetitions=num_repetitions)
@@ -139,7 +138,6 @@ class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
                             torch.ones(batch["text"].shape[0]) * parallel_state.get_model_parallel_src_rank()
                         )
                         rollout_batch = self.detokenize(policy_model, rollout_batch)
-
                         # iterate over tasks and call the environments to get rewards
                         microbatch_futures = []
                         for task in self.tasks_to_environments.keys():
@@ -218,9 +216,9 @@ class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
             rank = torch.distributed.get_rank()
             savefile = f"train_{rank}.jsonl" if not is_validation else f"validation_{rank}.jsonl"
             self.generation_log(global_rollout_batch, os.path.join(self.generation_save_dir, savefile))
-        
+
         return global_rollout_batch, cpu_dict(metrics), self.timer.consume_durations()
-    
+
     def post_process_and_compute_rollout_metrics(self, global_rollout_batch):
         # iterate over tasks and call the environments to get metrics and finalized batches
         split_idxs, split_batches, metrics = [], [], {}
@@ -236,7 +234,7 @@ class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
                 split_idxs.append(indices)
                 split_batches.append(task_batch)
                 metrics[task] = task_metrics#add_prefix(task_metrics, task)
-        
+
         # recompose batches
         recomposed_batch = reconstruct_split_batch(split_idxs, split_batches)
         return recomposed_batch, {**metrics, **self.compute_overall_metrics(global_rollout_batch)}
