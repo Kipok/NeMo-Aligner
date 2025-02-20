@@ -321,6 +321,7 @@ class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
             }
             records.append(record)
 
+        os.makedirs(os.path.dirname(savefile), exist_ok=True)
         with open(savefile, "a", encoding="utf-8") as f:
             for record in records:
                 json.dump(record, f)
