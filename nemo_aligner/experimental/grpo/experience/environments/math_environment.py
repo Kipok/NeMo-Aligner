@@ -74,27 +74,28 @@ class MathEnvironment(EnvironmentInterface):
 
     def finish_step(self, future):
         # gets the future result and also broadcasts within the current MP group
-        prefilled_judgements, prefilled_indices, generation_ids = future
-        if generation_ids:
-            outputs = self.llm.get_generations(generation_ids)
-        else:
-            outputs = []
-
-        judgements = []
-        prefilled_idx = 0
-        generation_idx = 0
-        # looping over all and selecting either prefilled or generated judgements
-        for idx in range(len(outputs) + len(prefilled_judgements)):
-            if idx in prefilled_indices:
-                judgements.append(prefilled_judgements[prefilled_idx])
-                prefilled_idx += 1
+        if future is not None:
+            prefilled_judgements, prefilled_indices, generation_ids = future
+            if generation_ids:
+                outputs = self.llm.get_generations(generation_ids)
             else:
-                judgements.append(outputs[generation_idx]["generation"])
-                generation_idx += 1
-        results = [is_correct_judgement(judgement) for judgement in judgements]
+                outputs = []
 
-        # sharing across MP group
-        results = torch.tensor(results, device=torch.cuda.current_device()).unsqueeze(1)
+            judgements = []
+            prefilled_idx = 0
+            generation_idx = 0
+            # looping over all and selecting either prefilled or generated judgements
+            for idx in range(len(outputs) + len(prefilled_judgements)):
+                if idx in prefilled_indices:
+                    judgements.append(prefilled_judgements[prefilled_idx])
+                    prefilled_idx += 1
+                else:
+                    judgements.append(outputs[generation_idx]["generation"])
+                    generation_idx += 1
+            results = [is_correct_judgement(judgement) for judgement in judgements]
+
+            # sharing across MP group
+            results = torch.tensor(results, device=torch.cuda.current_device()).unsqueeze(1)
         results = broadcast_2d_tensor_within_mp(results)
         th_rewards = torch.tensor(results).squeeze(1)
 
