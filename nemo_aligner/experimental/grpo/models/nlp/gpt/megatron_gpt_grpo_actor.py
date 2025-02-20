@@ -375,7 +375,7 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
             if self.cfg.hf_model_name_or_configs_dir is not None:
                 hf_model_name_or_configs_dir = self.cfg.hf_model_name_or_configs_dir
             else:  # getting it from the tokenizer
-                hf_model_name_or_configs_dir = self.tokenizer.type
+                hf_model_name_or_configs_dir = self.cfg.tokenizer.type
             if os.path.isdir(hf_model_name_or_configs_dir):
                 # If a directory is provided, use it directly to obtain all .json files.
                 source_hf_jsons_dir = hf_model_name_or_configs_dir

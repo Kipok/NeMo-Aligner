@@ -74,6 +74,7 @@ class MathEnvironment(EnvironmentInterface):
 
     def finish_step(self, future):
         # gets the future result and also broadcasts within the current MP group
+        results = None
         if future is not None:
             prefilled_judgements, prefilled_indices, generation_ids = future
             if generation_ids:
