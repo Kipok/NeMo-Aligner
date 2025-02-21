@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch 
+import torch
 import einops
 
 from nemo_aligner.experimental.grpo.utils import parallel_state
@@ -81,7 +81,7 @@ def split_qkv_llama(gathered_mcore_qkv_layer, cfg):
 
 def split_fc1_gate_down_llama(gathered_mcore_fc1, cfg):
     # gate proj and up proj are mixed right now, and we need to reshape them
-    # [ gate_tp0 ]     [ gate_tp0 ] 
+    # [ gate_tp0 ]     [ gate_tp0 ]
     # [  up_tp0  ] --\ [ gate_tp1 ] --\ (split gate)
     # [ gate_tp1 ] --/ [  up_tp0  ] --/ (split  up)
     # [  up_tp1  ]     [  up_tp1  ]
@@ -94,7 +94,7 @@ def split_fc1_gate_down_llama(gathered_mcore_fc1, cfg):
     return {mlp_up_proj_base_name: mlp_up_proj_weight, mlp_gate_proj_base_name: mlp_gate_proj_weight}
 
 
-mcore_te_to_hf_llama = {
+mcore_te_to_hf = {
     'model.embedding.word_embeddings.weight': {"tp": 0, "hf":"model.embed_tokens.weight"},
     'model.decoder.final_layernorm.weight': {"hf": "model.norm.weight"},
     'model.output_layer.weight': {"tp": 0, "hf":"lm_head.weight"},

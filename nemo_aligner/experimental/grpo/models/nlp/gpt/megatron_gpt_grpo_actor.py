@@ -68,7 +68,8 @@ from nemo_aligner.utils.utils import (
 from nemo_aligner.experimental.grpo.inference.utils.utils import parallel_save_cpu_state_dict
 
 from nemo_aligner.experimental.grpo.inference.registry import get_backend, list_available_backends
-from nemo_aligner.experimental.grpo.models.nlp.gpt import conversion_dict as CONVERTER
+from nemo_aligner.experimental.grpo.models.nlp.gpt import conversion_dict_llama as CONVERTER_LLAMA
+from nemo_aligner.experimental.grpo.models.nlp.gpt import conversion_dict_qwen as CONVERTER_QWEN
 
 from tensor_comms.shared_tensors import SharedCPUMemoryTensorDict
 
@@ -371,11 +372,12 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
         start_time = time.time()
         out_dir = self.cfg.grpo.share_dir
 
+        if self.cfg.hf_model_name_or_configs_dir is not None:
+            hf_model_name_or_configs_dir = self.cfg.hf_model_name_or_configs_dir
+        else:  # getting it from the tokenizer
+            hf_model_name_or_configs_dir = self.cfg.tokenizer.type
+
         if torch.cuda.current_device() == 0:
-            if self.cfg.hf_model_name_or_configs_dir is not None:
-                hf_model_name_or_configs_dir = self.cfg.hf_model_name_or_configs_dir
-            else:  # getting it from the tokenizer
-                hf_model_name_or_configs_dir = self.cfg.tokenizer.type
             if os.path.isdir(hf_model_name_or_configs_dir):
                 # If a directory is provided, use it directly to obtain all .json files.
                 source_hf_jsons_dir = hf_model_name_or_configs_dir
@@ -386,6 +388,14 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
         class SafeDict(dict):
             def __missing__(self, key):
                 return '{' + key + '}'
+
+        # TODO: more robust way
+        if 'llama' in hf_model_name_or_configs_dir:
+            converter = CONVERTER_LLAMA
+        elif 'qwen' in hf_model_name_or_configs_dir:
+            converter = CONVERTER_QWEN
+        else:
+            raise ValueError(f"Cannot figure out model type: {hf_model_name_or_configs_dir}")
 
         with torch.no_grad():
             checksum = 0
@@ -401,9 +411,9 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
             # with its corresponding global layer number (if applicable).
             local_map = {}
             for key in self.state_dict().keys():
-                local_layer = CONVERTER.get_local_layer_num(key)
+                local_layer = converter.get_local_layer_num(key)
                 if local_layer is not None:
-                    global_layer = CONVERTER.get_global_layer_num(key, self.cfg)
+                    global_layer = converter.get_global_layer_num(key, self.cfg)
                     # Replace the first occurrence of the digits after "layers." with the global layer number.
                     global_key = re.sub(r'(?<=layers\.)\d+', str(global_layer), key, count=1)
                 else:
@@ -435,12 +445,12 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                     param = self.state_dict()[owner_raw_key]
 
                     # Retrieve layer identification info using the conversion helpers.
-                    local_layer = CONVERTER.get_local_layer_num(owner_raw_key)
-                    global_layer = CONVERTER.get_global_layer_num(owner_raw_key, self.cfg) if local_layer is not None else None
+                    local_layer = converter.get_local_layer_num(owner_raw_key)
+                    global_layer = converter.get_global_layer_num(owner_raw_key, self.cfg) if local_layer is not None else None
                     format_dict = SafeDict(l=local_layer, gl=global_layer)
 
                     # Use the conversion dict to get the appropriate recipe for this parameter.
-                    formatted_mapping = {k.format_map(format_dict): rec for k, rec in CONVERTER.mcore_te_to_hf_llama.items()}
+                    formatted_mapping = {k.format_map(format_dict): rec for k, rec in converter.mcore_te_to_hf.items()}
                     recipe = formatted_mapping.get(owner_raw_key, None)
                     if recipe is None:
                         print(f"WARNING: {owner_raw_key} has no recipe mapping for conversion", flush=True)
