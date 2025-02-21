@@ -390,9 +390,9 @@ class MegatronGPTActorModel(NLPAdapterModelMixin, MegatronGPTModel, AlignableGen
                 return '{' + key + '}'
 
         # TODO: more robust way
-        if 'llama' in hf_model_name_or_configs_dir:
+        if 'llama' in hf_model_name_or_configs_dir.lower():
             converter = CONVERTER_LLAMA
-        elif 'qwen' in hf_model_name_or_configs_dir:
+        elif 'qwen' in hf_model_name_or_configs_dir.lower():
             converter = CONVERTER_QWEN
         else:
             raise ValueError(f"Cannot figure out model type: {hf_model_name_or_configs_dir}")
