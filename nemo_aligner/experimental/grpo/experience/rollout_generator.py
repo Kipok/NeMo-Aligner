@@ -86,11 +86,11 @@ class SequenceRewardRolloutGenerator(RolloutGeneratorInterface):
         prompt_lengths = rollout_batch["prompt_lengths"]
 
         prompt_sentences = [
-            policy_model.tokenizer.ids_to_text(prompt_tokens[i][:prompt_lengths[i]].tolist())
+            policy_model.tokenizer.ids_to_text(prompt_tokens[i][:prompt_lengths[i]].tolist(), remove_special_tokens=False)
             for i in range(prompt_lengths.shape[0])
         ]
         response_sentences = [
-            policy_model.tokenizer.ids_to_text(response_tokens[i][prompt_lengths[i] : response_lengths[i]].tolist())
+            policy_model.tokenizer.ids_to_text(response_tokens[i][prompt_lengths[i] : response_lengths[i]].tolist(), remove_special_tokens=False)
             for i in range(response_lengths.shape[0])
         ]
 
