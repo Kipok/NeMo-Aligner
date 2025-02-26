@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import time
 from omegaconf import DictConfig
 
 import torch
@@ -78,7 +79,14 @@ class MathEnvironment(EnvironmentInterface):
         if future is not None:
             prefilled_judgements, prefilled_indices, generation_ids = future
             if generation_ids:
-                outputs = self.llm.get_generations(generation_ids)
+                outputs = []
+                # need to wait untill generations are done
+                for gen_id in generation_ids:
+                    gen_output = self.llm.get_generations([gen_id])[0]
+                    while gen_output is None:
+                        time.sleep(0.1)
+                        gen_output = self.llm.get_generations([gen_id])[0]
+                    outputs.append(gen_output)
             else:
                 outputs = []
 
